@@ -1,0 +1,138 @@
+# doordash_tracker_web.py
+import streamlit as st
+import json
+import os
+from datetime import datetime
+
+DATA_FILE = "doordash_records.json"
+
+# ------------------- Data handling -------------------
+def load_records():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r") as f:
+            try:
+                return json.load(f)
+            except:
+                return []
+    return []
+
+def save_records(records):
+    with open(DATA_FILE, "w") as f:
+        json.dump(records, f, indent=2)
+
+# ------------------- Streamlit app -------------------
+st.set_page_config(page_title="DoorDash Tracker", page_icon="🚗", layout="centered")
+st.title("🚗 DoorDash Driver Recordkeeping")
+
+# Initialize session state
+if "active_dash" not in st.session_state:
+    st.session_state.active_dash = None
+if "records" not in st.session_state:
+    st.session_state.records = load_records()
+
+# Main UI
+if st.session_state.active_dash is None:
+    # ====== START DASH ======
+    st.subheader("Start a New Dash")
+    start_odo = st.number_input("Starting odometer reading (miles)", min_value=0.0, step=0.1, format="%.2f")
+
+    col1, col2, col3 = st.columns([1,1,2])
+    if col1.button("Start Dash", type="primary", use_container_width=True):
+        if start_odo >= 0:
+            st.session_state.active_dash = {
+                "start_time": datetime.now().isoformat(),
+                "start_odo": float(start_odo),
+                "expenses": 0.0,
+                "notes": ""
+            }
+            st.success(f"Dash started at {datetime.now():%H:%M:%S}")
+            st.rerun()
+        else:
+            st.error("Enter a valid mileage")
+
+else:
+    # ====== ACTIVE DASH ======
+    start_dt = datetime.fromisoformat(st.session_state.active_dash["start_time"])
+    st.success(f"Active Dash – Started {start_dt:%H:%M}  |  {st.session_state.active_dash['start_odo']} mi")
+
+    # Add expenses during dash
+    col_a, col_b = st.columns(2)
+    with col_a:
+        exp_amount = st.number_input("Expense amount ($)", min_value=0.0, step=0.01, key="exp_amt")
+    with col_b:
+        exp_note = st.text_input("Note (optional)", key="exp_note")
+
+    if st.button("Add Expense", use_container_width=True):
+        if exp_amount > 0:
+            st.session_state.active_dash["expenses"] += exp_amount
+            if exp_note:
+                st.session_state.active_dash["notes"] += ("\n" if st.session_state.active_dash["notes"] else "") + f"• ${exp_amount:.2f} – {exp_note}"
+            st.success(f"${exp_amount:.2f} added")
+            st.rerun()
+
+    st.divider()
+    st.subheader("End Dash")
+
+    col1, col2 = st.columns(2)
+    end_odo = col1.number_input("Ending odometer (miles)", min_value=0.0, step=0.1, format="%.1f")
+    earnings = col2.number_input("Total earnings this dash ($)", min_value=0.0, step=0.01)
+
+    final_exp = st.number_input("One last expense (optional) ($)", min_value=0.0, step=0.01)
+
+    if st.button("Finish & Save Dash", type="primary", use_container_width=True):
+        if end_odo < st.session_state.active_dash["start_odo"]:
+            st.error("Ending mileage cannot be lower than starting mileage")
+        elif earnings < 0:
+            st.error("Earnings cannot be negative")
+        else:
+            # Final calculations
+            st.session_state.active_dash["expenses"] += final_exp
+            end_time = datetime.now()
+            duration_h = (end_time - start_dt).total_seconds() / 3600
+            miles = end_odo - st.session_state.active_dash["start_odo"]
+            net = earnings - st.session_state.active_dash["expenses"]
+            hourly = net / duration_h if duration_h > 0 else 0
+
+            record = {
+                "date": start_dt.strftime("%Y-%m-%d"),
+                "start_time": start_dt.strftime("%H:%M"),
+                "end_time": end_time.strftime("%H:%M"),
+                "duration_hours": round(duration_h, 2),
+                "miles": round(miles, 2),
+                "gross_earnings": round(earnings, 2),
+                "expenses": round(st.session_state.active_dash["expenses"], 2),
+                "net_profit": round(net, 2),
+                "hourly_rate": round(hourly, 2),
+                "notes": st.session_state.active_dash["notes"]
+            }
+
+            st.session_state.records.append(record)
+            save_records(st.session_state.records)
+
+            # Summary
+            st.balloons()
+            st.success(f"""
+**Dash Complete!**
+**Date:** {record['date']} | {record['start_time']}–{record['end_time']}
+**Duration:** {record['duration_hours']} h
+**Miles:** {record['miles']} mi
+**Gross:** ${record['gross_earnings']:.2f}  |  **Expenses:** ${record['expenses']:.2f}
+**Net Profit →** ${record['net_profit']:.2f}
+**Hourly (net) →** ${record['hourly_rate']:.2f}/h
+            """)
+
+            # Reset
+            st.session_state.active_dash = None
+            st.rerun()
+
+# ====== Past Records (Sidebar) ======
+with st.sidebar:
+    st.header("Recent Dashes")
+    if st.session_state.records:
+        recent = st.session_state.records[-10:][::-1]  # last 10, newest first
+        for r in recent:
+            st.write(f"**{r['date']}** – {r['duration_hours']}h – ${r['net_profit']:.2f} net")
+            st.caption(f"${r['hourly_rate']:.2f}/h")
+            st.divider()
+    else:
+        st.info("No dashes recorded yet")
