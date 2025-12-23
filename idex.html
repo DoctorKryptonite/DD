@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Big Bill's 'Q Order</title>
+    <meta name="description" content="Order Tri Tip for delivery">
+    <link rel="manifest" href="data:application/manifest+json,{%22name%22:%22Big%20Bill's%20'Q%20Order%22,%22short_name%22:%22BBQ%20Order%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22%23ffffff%22,%22theme_color%22:%22%23006600%22}">
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #fefefe; color: #333; }
+        h1 { text-align: center; color: #006600; }
+        h2 { color: #cc0000; border-bottom: 2px solid #cc0000; padding-bottom: 5px; }
+        section { background: #fff; padding: 15px; margin-bottom: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        label { display: block; margin: 15px 0 5px; font-weight: bold; }
+        input[type="text"], input[type="tel"], input[type="number"], textarea, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        input[type="number"] { -moz-appearance: textfield; }
+        button { background: #006600; color: white; padding: 12px 20px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin: 5px 0; }
+        button:hover { background: #008800; }
+        .tip-buttons { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; }
+        .tip-buttons button { background: #006600; }
+        .tip-buttons button:hover { background: #008800; }
+        #preview { display: none; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 5px; white-space: pre-wrap; }
+        .note { font-size: 0.9em; color: #666; text-align: center; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>Big Bill's 'Q<br>Order</h1>
+    <p class="note">Lompoc deliveries start ~2PM • Santa Maria ~4PM</p>
+
+    <!-- Optional: Add your flyer image here (upload to imgur.com, get direct link ending .jpg/.png, replace URL) -->
+    <!-- <img src="YOUR_FLYER_IMAGE_URL_HERE" style="width:100%; border-radius:10px; margin-bottom:20px;"> -->
+
+    <form id="orderForm">
+        <section>
+            <h2>Customer Information</h2>
+            <label>Name</label>
+            <input type="text" id="name" required>
+            <label>Phone (required for delivery/contact)</label>
+            <input type="tel" id="phone" required>
+            <label>Full Delivery Address</label>
+            <textarea id="address" rows="3" required></textarea>
+        </section>
+
+        <section>
+            <h2>Menu Selection</h2>
+            <label>Regular Tri Tip Sandwiches ($15 each)</label>
+            <input type="number" id="regular" min="0" value="0">
+            <label>Gluten Free Tri Tip Sandwiches ($17 each)</label>
+            <input type="number" id="gf" min="0" value="0">
+            <label>Tri Tip Meals ($20 each)<br><small>Includes Ranchero Beans, Potato Salad, Garlic Bread</small></label>
+            <input type="number" id="meal" min="0" value="0">
+            <label>Add 8 oz Grilled Linguica ($8 each)</label>
+            <input type="number" id="linguica" min="0" value="0">
+            <label>Add 12 oz Coke ($2 each)</label>
+            <input type="number" id="coke" min="0" value="0">
+            <label>Add 12 oz Diet Coke ($2 each)</label>
+            <input type="number" id="diet" min="0" value="0">
+            <label>Special Requests (optional)</label>
+            <textarea id="special" rows="2"></textarea>
+        </section>
+
+        <section>
+            <h2>Tip (Optional)</h2>
+            <label>Tip Amount ($)</label>
+            <input type="number" id="tip" min="0" step="0.01" value="0.00">
+            <p>Quick tip suggestions (based on food subtotal):</p>
+            <div class="tip-buttons">
+                <button type="button" onclick="setTip(0.15)">15%</button>
+                <button type="button" onclick="setTip(0.25)">25%</button>
+                <button type="button" onclick="setTip(0.30)">30%</button>
+                <button type="button" onclick="setTipCustom()">Custom</button>
+            </div>
+        </section>
+
+        <section>
+            <h2>Payment Method</h2>
+            <select id="payment">
+                <option value="Cash">Cash on Delivery</option>
+                <option value="Apple Pay">Apple Pay</option>
+                <option value="PayPal">PayPal</option>
+                <option value="Venmo">Venmo</option>
+                <option value="Chime">Chime</option>
+            </select>
+        </section>
+
+        <button type="button" onclick="previewOrder()">Calculate Total & Preview Order</button>
+    </form>
+
+    <div id="preview">
+        <h2>Order Summary</h2>
+        <pre id="itemsList"></pre>
+        <p>Subtotal: $<span id="subtotal">0.00</span></p>
+        <p id="tipLine">Tip: $<span id="tipDisplay">0.00</span></p>
+        <p style="font-size:1.2em;"><strong>Total Due: $<span id="total">0.00</span></strong></p>
+        <p id="paymentInfo" style="font-weight:bold;"></p>
+        <p class="note">For non-cash payments, please send the total due (includes tip if added) before sending the order text.</p>
+
+        <h2>Message That Will Be Sent</h2>
+        <textarea id="messagePreview" readonly rows="12" style="width:100%;"></textarea>
+
+        <button onclick="sendSMS()">Send Order via SMS</button>
+        <button onclick="copyMessage()">Copy Message to Clipboard</button>
+        <button onclick="resetPreview()" style="background:#666;">Edit Order</button>
+    </div>
+
+    <script>
+        const phoneNumber = '8058650276';
+        const payment
